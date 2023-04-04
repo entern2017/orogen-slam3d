@@ -63,6 +63,10 @@ task_context "PointcloudMapper" do
 	.returns('/bool')
 	.doc("Writes the accumulated pointcloud as ply to the given folder.")
 
+	operation('write_database')
+	.returns('/bool')
+	.doc("Writes the graph to the datrabase.")
+
 	property('scan_resolution', '/double', 0.01)
 	.doc("Pointclouds are downsampled to this resolution before being added to the map.")
 
@@ -213,6 +217,12 @@ task_context "PointcloudMapper" do
 	property('initial_patch_radius', '/double', 0.0)
 	.doc("Fill ground plane in the first scan within this radius. This allows
 	navigation right after adding the first scan to the map.")
+
+	property('db_host', '/std/string', "localhost")
+	.doc("Database host to connect for graph backup.")
+
+	property('db_schema', '/std/string', "default")
+	.doc("Database schema to use for graph backup.")
 
 end
 

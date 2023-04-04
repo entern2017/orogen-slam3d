@@ -17,6 +17,8 @@
 #include <pcl/common/transforms.h>
 #include <pcl/io/ply_io.h>
 
+#include <pqxx/except>
+
 using namespace slam3d;
 
 PointcloudMapper::PointcloudMapper(std::string const& name)
@@ -104,6 +106,12 @@ bool PointcloudMapper::write_envire()
 bool PointcloudMapper::write_graph()
 {
 	mGraph->writeGraphToFile("slam3d_graph");
+	
+	VertexObjectList vo_list = mGraph->getVerticesFromSensor(mPclSensor->getName());
+	for(VertexObject vo : vo_list)
+	{
+		mDataStorage->writeMeasurement(vo);
+	}
 	return true;
 }
 
@@ -130,6 +138,11 @@ bool PointcloudMapper::write_ply(const std::string& folder)
 
 	pcl::PLYWriter ply_writer;
 	return ply_writer.write(ply_path.string(), *accCloud) >= 0;
+}
+
+bool PointcloudMapper::write_database()
+{
+	return true;
 }
 
 PointCloud::Ptr PointcloudMapper::buildPointcloud(const VertexObjectList& vertices)
@@ -283,6 +296,14 @@ bool PointcloudMapper::configureHook()
 	mPclSensor = new PointCloudSensor("LaserScanner", mLogger);
 	mPclSensor->setPatchSolver(mPatchSolver);
 
+	try
+	{
+		mDataStorage = new DataStorage(mLogger, _db_host.get(), _db_schema.get());
+	}catch(pqxx::sql_error &e)
+	{
+		mDataStorage = nullptr;
+		mLogger->message(ERROR, (boost::format("SQL error: %1% (Query was: <%2%>)") % e.what() % e.query()).str());
+	}
 	mGraph = new BoostGraph(mLogger);
 	mGraph->setSolver(mSolver);
 	mGraph->fixNext();
@@ -566,4 +587,5 @@ void PointcloudMapper::cleanupHook()
 	delete mPatchSolver;
 	delete mLogger;
 	delete mClock;
+	delete mDataStorage;
 }

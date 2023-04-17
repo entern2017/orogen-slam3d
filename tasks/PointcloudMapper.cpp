@@ -9,15 +9,19 @@
 #include <slam3d/graph/boost/BoostGraph.hpp>
 #include <slam3d/core/FileLogger.hpp>
 #include <slam3d/solver/g2o/G2oSolver.hpp>
+#include <slam3d/core/PostgreStorage.hpp>
 
 #include <boost/format.hpp>
 #include <boost/thread.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/serialization/export.hpp>
 
 #include <pcl/common/transforms.h>
 #include <pcl/io/ply_io.h>
 
 #include <pqxx/except>
+
+BOOST_CLASS_EXPORT_IMPLEMENT(slam3d::PointCloudMeasurement)
 
 using namespace slam3d;
 
@@ -106,12 +110,6 @@ bool PointcloudMapper::write_envire()
 bool PointcloudMapper::write_graph()
 {
 	mGraph->writeGraphToFile("slam3d_graph");
-	
-	VertexObjectList vo_list = mGraph->getVerticesFromSensor(mPclSensor->getName());
-	for(VertexObject vo : vo_list)
-	{
-		mDataStorage->writeMeasurement(vo);
-	}
 	return true;
 }
 
@@ -298,12 +296,14 @@ bool PointcloudMapper::configureHook()
 
 	try
 	{
-		mDataStorage = new DataStorage(mLogger, _db_host.get(), _db_schema.get());
+		mStorage = new PostgreStorage(mLogger, _db_host.get(), _db_schema.get());
 	}catch(pqxx::sql_error &e)
 	{
-		mDataStorage = nullptr;
+		mStorage = nullptr;
 		mLogger->message(ERROR, (boost::format("SQL error: %1% (Query was: <%2%>)") % e.what() % e.query()).str());
 	}
+
+	// Initialize Graph
 	mGraph = new BoostGraph(mLogger);
 	mGraph->setSolver(mSolver);
 	mGraph->fixNext();
@@ -393,7 +393,6 @@ bool PointcloudMapper::configureHook()
 	{
 		mScansAdded++;
 	}
-	
 	return true;
 }
 
@@ -520,7 +519,9 @@ void PointcloudMapper::updateHook()
 				mForceAdd = false;
 				mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
 				mPclSensor->linkLastToNeighbors();
-				handleNewScan(mMapper->getLastVertex());
+				handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
+				
+				mStorage->add(measurement);
 				
 				if(mGraph->getNumOfNewConstraints() >= _optimization_rate)
 				{
@@ -587,5 +588,5 @@ void PointcloudMapper::cleanupHook()
 	delete mPatchSolver;
 	delete mLogger;
 	delete mClock;
-	delete mDataStorage;
+	delete mStorage;
 }

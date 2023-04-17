@@ -3,7 +3,7 @@
 
 #include <slam3d/PointcloudMapperBase.hpp>
 #include <slam3d/core/Mapper.hpp>
-#include <slam3d/core/DataStorage.hpp>
+#include <slam3d/core/MeasurementStorage.hpp>
 #include <slam3d/sensor/pcl/PointCloudSensor.hpp>
 
 #include <maps/grid/MLSMap.hpp>
@@ -54,7 +54,7 @@ namespace slam3d
 		slam3d::PointCloudSensor* mPclSensor;
 		slam3d::Solver* mSolver;
 		slam3d::Solver* mPatchSolver;
-		slam3d::DataStorage* mDataStorage;
+		slam3d::MeasurementStorage* mStorage;
 		RockOdometry* mOdometry;
 		boost::shared_mutex mGraphMutex;
 		boost::shared_mutex mMapMutex;

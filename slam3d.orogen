@@ -10,7 +10,7 @@ import_types_from 'base'
 import_types_from 'maps'
 import_types_from 'pcl'
 import_types_from 'slam3d/sensor/pcl/RegistrationParameters.hpp'
-import_types_from 'maps/grid/MLSConfig.hpp'
+#import_types_from 'maps/grid/MLSConfig.hpp'
 import_types_from 'GridConfiguration.hpp'
 
 ## Mapper using Pointclouds
@@ -20,6 +20,7 @@ task_context "PointcloudMapper" do
 	input_port 'scan', '/base/samples/Pointcloud'
 	output_port 'cloud', '/base/samples/Pointcloud'
 	output_port 'mls', '/maps/grid/MLSMapSloped'
+	output_port 'mls_pre', '/maps/grid/MLSMapPrecalculated'
 	output_port 'robot2map', 'base/samples/RigidBodyState'
 	output_port 'odometry2map', 'base/samples/RigidBodyState'
 

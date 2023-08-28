@@ -508,11 +508,18 @@ void PointcloudMapper::updateHook()
 			
 			mScansReceived++;
 
-			if(mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp())))
+			bool added = false;
+			if(mOdometry)
+				if(added = mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp())))
+					mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
+			else
+				added = mPclSensor->addMeasurement(measurement);
+
+			if(added)
 			{
 				mScansAdded++;
 				mForceAdd = false;
-				mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
+
 				mPclSensor->linkLastToNeighbors();
 				handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
 				

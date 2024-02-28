@@ -52,7 +52,7 @@ Transform RockOdometry::getPose(base::Time t)
 	bool res;
 	try
 	{
-		res = mTransformation.get(t, affine, false);
+		res = mTransformation.get(t, affine, true);
 	}catch(std::exception& e)
 	{
 		throw InvalidPose(e.what());

@@ -30,6 +30,8 @@ task_context "PointcloudMapper" do
 		transform "robot", "odometry"
 		max_latency 0.5
 
+		align_port "scan"
+
 		transform_output "robot2map", "robot" => "map"
 		transform_output "odometry2map", "odometry" => "map"
 	end

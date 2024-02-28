@@ -319,7 +319,7 @@ bool PointcloudMapper::configureHook()
 	if(_use_odometry.get())
 	{
 		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry);
-		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
+//		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
 		mLogger->message(INFO, (boost::format("add_odometry_edges:     %1%") % _add_odometry_edges).str());
 		if(_add_odometry_edges)
 		{
@@ -383,6 +383,7 @@ bool PointcloudMapper::startHook()
 	return true;
 }
 
+/*
 void PointcloudMapper::transformerCallback(const base::Time &time)
 {
 	try
@@ -401,18 +402,16 @@ void PointcloudMapper::transformerCallback(const base::Time &time)
 		mLogger->message(ERROR, e.what());
 	}
 }
+*/
 
-void PointcloudMapper::updateHook()
+void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base::samples::Pointcloud &scan_sample)
 {
-	try
+	if(ts != scan_sample.time)
 	{
-		PointcloudMapperBase::updateHook();
-	}catch(std::exception &e)
-	{
-		mLogger->message(ERROR, e.what());
+		mLogger->message(ERROR, "Timestamps of scan and transformer do not match.");
 		return;
 	}
-
+	
 	// Check if we have to set start pose from odometry
 	if(!mStartPoseInitialized)
 	{
@@ -420,7 +419,7 @@ void PointcloudMapper::updateHook()
 		Eigen::Affine3d affine = Eigen::Affine3d::Identity();
 		try
 		{
-			if(!_robot2odometry.get(base::Time::now(), affine, false) || !affine.matrix().allFinite())
+			if(!_robot2odometry.get(ts, affine, true) || !affine.matrix().allFinite())
 			{
 				mLogger->message(ERROR, (boost::format("Failed to receive a valid transform from '%1%' to '%2%'!")
 					% _robot_frame.get() % _odometry_frame.get()).str());
@@ -441,125 +440,133 @@ void PointcloudMapper::updateHook()
 		mStartPoseInitialized = true;
 	}
 
-	base::samples::Pointcloud scan_sample;
-	while(_scan.read(scan_sample, false) == RTT::NewData)
+	if(scan_sample.points.size() == 0)
 	{
-		if(scan_sample.points.size() == 0)
+		mLogger->message(ERROR, "Scan sample has no points.");
+		return;
+	}
+
+	// Get laser pose
+	Transform laserPose = Transform::Identity();
+	try
+	{
+		Eigen::Affine3d affine;
+		if(!_laser2robot.get(scan_sample.time, affine, true) || !affine.matrix().allFinite())
 		{
-			mLogger->message(ERROR, "Scan sample has no points.");
-			continue;
+			mLogger->message(ERROR, (boost::format("Failed to receive a valid transform from '%1%' to '%2%'!")
+				% _laser_frame.get() % _robot_frame.get()).str());
+			return;
+		}
+		laserPose.linear() = affine.linear();
+		laserPose.translation() = affine.translation();
+	}
+	catch(std::exception &e)
+	{
+		mLogger->message(ERROR, e.what());
+		return;
+	}
+
+	// Transform base::samples::Pointcloud --> Pointcloud
+	PointCloud::Ptr cloud = createFromRockMessage(scan_sample);
+	if(mScansAdded == 0 && _initial_patch_radius > 0)
+	{
+		mPclSensor->fillGroundPlane(cloud, _initial_patch_radius);
+	}
+	
+	// Downsample and add to map
+	PointCloudMeasurement::Ptr measurement;
+	try
+	{
+		if(mOdometry)
+		{
+			if(!mPclSensor->checkMeasurementDistance(mOdometry->getPose(scan_sample.time)))
+				return;
 		}
 
-		// Get laser pose
-		Transform laserPose = Transform::Identity();
-		try
+		if(_scan_resolution > 0)
 		{
-			Eigen::Affine3d affine;
-			if(!_laser2robot.get(scan_sample.time, affine, false) || !affine.matrix().allFinite())
-			{
-				mLogger->message(ERROR, (boost::format("Failed to receive a valid transform from '%1%' to '%2%'!")
-					% _laser_frame.get() % _robot_frame.get()).str());
-				continue;
-			}
-			laserPose.linear() = affine.linear();
-			laserPose.translation() = affine.translation();
-		}
-		catch(std::exception &e)
+			PointCloud::Ptr downsampled_cloud = mPclSensor->downsample(cloud, _scan_resolution);
+			mLogger->message(DEBUG, (boost::format("Downsampled cloud has %1% points.") % downsampled_cloud->size()).str());
+			measurement = PointCloudMeasurement::Ptr(new PointCloudMeasurement(downsampled_cloud, _robot_name.get(), mPclSensor->getName(), laserPose));
+		}else
 		{
-			mLogger->message(ERROR, e.what());
-			continue;
-		}
-
-		// Transform base::samples::Pointcloud --> Pointcloud
-		PointCloud::Ptr cloud = createFromRockMessage(scan_sample);
-		if(mScansAdded == 0 && _initial_patch_radius > 0)
-		{
-			mPclSensor->fillGroundPlane(cloud, _initial_patch_radius);
+			measurement = PointCloudMeasurement::Ptr(new PointCloudMeasurement(cloud, _robot_name.get(), mPclSensor->getName(), laserPose));
 		}
 		
-		// Downsample and add to map
-		PointCloudMeasurement::Ptr measurement;
-		try
+		mScansReceived++;
+
+		bool added = false;
+		if(mOdometry)
 		{
-			if(mOdometry)
-			{
-				if(!mPclSensor->checkMeasurementDistance(mOdometry->getPose(scan_sample.time)))
-					continue;
-			}
-
-			if(_scan_resolution > 0)
-			{
-				PointCloud::Ptr downsampled_cloud = mPclSensor->downsample(cloud, _scan_resolution);
-				mLogger->message(DEBUG, (boost::format("Downsampled cloud has %1% points.") % downsampled_cloud->size()).str());
-				measurement = PointCloudMeasurement::Ptr(new PointCloudMeasurement(downsampled_cloud, _robot_name.get(), mPclSensor->getName(), laserPose));
-			}else
-			{
-				measurement = PointCloudMeasurement::Ptr(new PointCloudMeasurement(cloud, _robot_name.get(), mPclSensor->getName(), laserPose));
-			}
-			
-			mScansReceived++;
-
-			bool added = false;
-			if(mOdometry)
-			{
-				added = mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp()));
-				if(added)
-				{
-					mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
-				}
-			}else
-			{
-				added = mPclSensor->addMeasurement(measurement);
-			}
-
+			added = mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp()));
 			if(added)
 			{
-				mScansAdded++;
-				mForceAdd = false;
-
-				mPclSensor->linkLastToNeighbors();
-				handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
-				
-				if(mGraph->getNumOfNewConstraints() >= _optimization_rate)
-				{
-					optimize();
-				}
-				
-				if(_map_publish_rate > 0 && (mScansAdded % _map_publish_rate) == 0)
-				{
-					generate_map();
-				}
-			}else
-			{
-				if((_map_update_rate > 0) && (mScansReceived >= _map_update_rate))
-				{
-					addScanToMap(measurement, mMapper->getCurrentPose());
-					sendMap();
-				}
+				mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
 			}
-			mCurrentTime = scan_sample.time;
-			
-			// Send the calculated transform
-			base::samples::RigidBodyState rbs;
-			rbs.invalidateCovariances();
-			rbs.targetFrame = _map_frame.get();
-			rbs.time = mCurrentTime;
-			
-			if(mOdometry)
-			{
-				rbs.sourceFrame = _odometry_frame.get();
-				rbs.setTransform(mCurrentDrift);
-				_odometry2map.write(rbs);
-			}else
-			{
-				rbs.sourceFrame = _robot_frame.get();
-				rbs.setTransform(mMapper->getCurrentPose());
-				_robot2map.write(rbs);
-			}
-		}catch(std::exception& e)
+		}else
 		{
-			mLogger->message(ERROR, (boost::format("Adding scan to map failed: %1%") % e.what()).str());
+			added = mPclSensor->addMeasurement(measurement);
 		}
+
+		if(added)
+		{
+			mScansAdded++;
+			mForceAdd = false;
+
+			mPclSensor->linkLastToNeighbors();
+			handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
+			
+			if(mGraph->getNumOfNewConstraints() >= _optimization_rate)
+			{
+				optimize();
+			}
+			
+			if(_map_publish_rate > 0 && (mScansAdded % _map_publish_rate) == 0)
+			{
+				generate_map();
+			}
+		}else
+		{
+			if((_map_update_rate > 0) && (mScansReceived >= _map_update_rate))
+			{
+				addScanToMap(measurement, mMapper->getCurrentPose());
+				sendMap();
+			}
+		}
+		mCurrentTime = scan_sample.time;
+		
+		// Send the calculated transform
+		base::samples::RigidBodyState rbs;
+		rbs.invalidateCovariances();
+		rbs.targetFrame = _map_frame.get();
+		rbs.time = mCurrentTime;
+		
+		if(mOdometry)
+		{
+			rbs.sourceFrame = _odometry_frame.get();
+			rbs.setTransform(mCurrentDrift);
+			_odometry2map.write(rbs);
+		}else
+		{
+			rbs.sourceFrame = _robot_frame.get();
+			rbs.setTransform(mMapper->getCurrentPose());
+			_robot2map.write(rbs);
+		}
+	}catch(std::exception& e)
+	{
+		mLogger->message(ERROR, (boost::format("Adding scan to map failed: %1%") % e.what()).str());
+	}
+}
+
+void PointcloudMapper::updateHook()
+{
+	try
+	{
+		PointcloudMapperBase::updateHook();
+	}catch(std::exception &e)
+	{
+		mLogger->message(ERROR, e.what());
+		return;
 	}
 }
 

@@ -32,7 +32,8 @@ namespace slam3d
 		
 		// Callbacks
 		virtual bool setLog_level(boost::int32_t value);
-		void transformerCallback(const base::Time &time);
+//		void transformerCallback(const base::Time &time);
+		virtual void scanTransformerCallback(const base::Time &ts, const base::samples::Pointcloud &scan_sample);
 
 		// Internal methods
 		PointCloud::Ptr buildPointcloud(const VertexObjectList& vertices);

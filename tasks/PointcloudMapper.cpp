@@ -319,7 +319,7 @@ bool PointcloudMapper::configureHook()
 	if(_use_odometry.get())
 	{
 		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry);
-//		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
+		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
 		mLogger->message(INFO, (boost::format("add_odometry_edges:     %1%") % _add_odometry_edges).str());
 		if(_add_odometry_edges)
 		{
@@ -383,26 +383,12 @@ bool PointcloudMapper::startHook()
 	return true;
 }
 
-/*
+
 void PointcloudMapper::transformerCallback(const base::Time &time)
 {
-	try
-	{
-		// Send the current pose
-		base::samples::RigidBodyState rbs;
-		rbs.setTransform(mCurrentDrift * mOdometry->getPose(time));
-		rbs.invalidateCovariances();
-		rbs.time = time;
-		rbs.sourceFrame = _robot_frame.get();
-		rbs.targetFrame = _map_frame.get();
-		_robot2map.write(rbs);
-	}
-	catch(InvalidPose &e)
-	{
-		mLogger->message(ERROR, e.what());
-	}
+	mCurrentTime = time;
 }
-*/
+
 
 void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base::samples::Pointcloud &scan_sample)
 {
@@ -534,24 +520,6 @@ void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base:
 			}
 		}
 		mCurrentTime = scan_sample.time;
-		
-		// Send the calculated transform
-		base::samples::RigidBodyState rbs;
-		rbs.invalidateCovariances();
-		rbs.targetFrame = _map_frame.get();
-		rbs.time = mCurrentTime;
-		
-		if(mOdometry)
-		{
-			rbs.sourceFrame = _odometry_frame.get();
-			rbs.setTransform(mCurrentDrift);
-			_odometry2map.write(rbs);
-		}else
-		{
-			rbs.sourceFrame = _robot_frame.get();
-			rbs.setTransform(mMapper->getCurrentPose());
-			_robot2map.write(rbs);
-		}
 	}catch(std::exception& e)
 	{
 		mLogger->message(ERROR, (boost::format("Adding scan to map failed: %1%") % e.what()).str());
@@ -563,6 +531,27 @@ void PointcloudMapper::updateHook()
 	try
 	{
 		PointcloudMapperBase::updateHook();
+
+		// Send the calculated transforms
+		base::samples::RigidBodyState rbs;
+		rbs.invalidateCovariances();
+		rbs.sourceFrame = _robot_frame.get();
+		rbs.targetFrame = _map_frame.get();
+		rbs.time = mCurrentTime;
+		
+		if(mOdometry)
+		{
+			rbs.setTransform(mCurrentDrift * mOdometry->getPose(mCurrentTime));
+			_robot2map.write(rbs);
+
+			rbs.sourceFrame = _odometry_frame.get();
+			rbs.setTransform(mCurrentDrift);
+			_odometry2map.write(rbs);
+		}else
+		{
+			rbs.setTransform(mMapper->getCurrentPose());
+			_robot2map.write(rbs);
+		}
 	}catch(std::exception &e)
 	{
 		mLogger->message(ERROR, e.what());

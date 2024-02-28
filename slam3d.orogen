@@ -23,12 +23,12 @@ task_context "PointcloudMapper" do
 	output_port 'robot2map', 'base/samples/RigidBodyState'
 	output_port 'odometry2map', 'base/samples/RigidBodyState'
 
-	periodic 0.1
+	periodic 0.01
 
 	transformer do
 		transform "laser", "robot"
 		transform "robot", "odometry"
-		max_latency 0.5
+		max_latency 0.1
 
 		align_port "scan"
 

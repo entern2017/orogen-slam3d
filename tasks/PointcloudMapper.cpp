@@ -549,7 +549,7 @@ void PointcloudMapper::updateHook()
 			_odometry2map.write(rbs);
 		}else
 		{
-			rbs.setTransform(mMapper->getCurrentPose());
+			rbs.setTransform(mPclSensor->getCurrentPose());
 			_robot2map.write(rbs);
 		}
 	}catch(std::exception &e)

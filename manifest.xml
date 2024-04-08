@@ -16,7 +16,7 @@
 	<depend package="base/orogen/types" />
 	<depend package="base/logging" />
 	<depend package="tools/orocos.rb" />
-	<depend package="gui/vizkit" />
+	<depend package="gui/vizkit" optional="1" />
 	
 	<depend package="slam/orogen/maps" />
 	<depend package="slam/orogen/pcl" />

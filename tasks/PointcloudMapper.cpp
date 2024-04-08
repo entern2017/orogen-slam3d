@@ -496,6 +496,12 @@ void PointcloudMapper::updateHook()
 		PointCloudMeasurement::Ptr measurement;
 		try
 		{
+			if(mOdometry)
+			{
+				if(!mPclSensor->checkMeasurementDistance(mOdometry->getPose(scan_sample.time)))
+					continue;
+			}
+
 			if(_scan_resolution > 0)
 			{
 				PointCloud::Ptr downsampled_cloud = mPclSensor->downsample(cloud, _scan_resolution);
@@ -510,10 +516,16 @@ void PointcloudMapper::updateHook()
 
 			bool added = false;
 			if(mOdometry)
-				if(added = mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp())))
+			{
+				added = mPclSensor->addMeasurement(measurement, mOdometry->getPose(measurement->getTimestamp()));
+				if(added)
+				{
 					mCurrentDrift = orthogonalize(mMapper->getCurrentPose() * mOdometry->getPose(measurement->getTimestamp()).inverse());
-			else
+				}
+			}else
+			{
 				added = mPclSensor->addMeasurement(measurement);
+			}
 
 			if(added)
 			{

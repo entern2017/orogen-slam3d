@@ -6,6 +6,7 @@
 #include <slam3d/sensor/pcl/PointCloudSensor.hpp>
 
 #include <maps/grid/MLSMap.hpp>
+#include <maps/grid/TSDFVolumetricMap.hpp>
 
 #include <queue>
 #include <boost/thread/shared_mutex.hpp>
@@ -26,9 +27,11 @@ namespace slam3d
 		virtual bool generate_map();
 		virtual bool optimize();
 		virtual bool force_add();
+		virtual bool generate_precalculated_mls();
 		virtual bool write_graph();
 		virtual bool write_envire();
 		virtual bool write_ply(const std::string& folder);
+		bool createTSDFMap(maps::grid::TSDFVolumetricMap& tsdf, VertexObjectList& vertices);
 		
 		// Callbacks
 		virtual bool setLog_level(boost::int32_t value);

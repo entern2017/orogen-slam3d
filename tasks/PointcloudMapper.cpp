@@ -17,6 +17,9 @@
 #include <pcl/common/transforms.h>
 #include <pcl/io/ply_io.h>
 
+#include <maps/tools/TSDF_MLSMapReconstruction.hpp>
+#include <maps/tools/TSDFPolygonMeshReconstruction.hpp>
+
 using namespace slam3d;
 
 PointcloudMapper::PointcloudMapper(std::string const& name)
@@ -130,6 +133,69 @@ bool PointcloudMapper::write_ply(const std::string& folder)
 
 	pcl::PLYWriter ply_writer;
 	return ply_writer.write(ply_path.string(), *accCloud) >= 0;
+}
+
+bool PointcloudMapper::generate_precalculated_mls()
+{
+    mLogger->message(INFO, "Requested precalculated mls map generation.");
+    optimize();
+    VertexObjectList vertices = mGraph->getVerticesFromSensor(mPclSensor->getName());
+    if(vertices.empty())
+        return false;
+        
+    size_t x_size = (mGridConf.max_x - mGridConf.min_x) / mGridConf.resolution;
+    size_t y_size = (mGridConf.max_y - mGridConf.min_y) / mGridConf.resolution;
+    maps::grid::TSDFVolumetricMap::Ptr tsdf(new maps::grid::TSDFVolumetricMap(maps::grid::Vector2ui(x_size, y_size), Eigen::Vector3d(mGridConf.resolution, mGridConf.resolution, mGridConf.resolution)));
+    tsdf->getId() = "/slam3d-tsdf";
+    tsdf->translate(Eigen::Vector3d(mGridConf.min_x, mGridConf.min_y, 0));
+
+    if(!createTSDFMap(*tsdf, vertices))
+        return false;
+        
+    // render MLS
+    maps::grid::MLSMapPrecalculated pre_mls;
+    maps::tools::TSDF_MLSMapReconstruction surface_reconstruction;
+    surface_reconstruction.setTSDFMap(tsdf);
+    surface_reconstruction.reconstruct(pre_mls);
+    
+    //if(!folder.empty())
+    //{
+    //    boost::filesystem::path env_path(folder);
+    //    boost::filesystem::create_directories(env_path);
+    //    env_path += "precalculated_mls_map-";
+    //    env_path += base::Time::now().toString(base::Time::Seconds, "%Y%m%d-%H%M");
+    //    env_path += ".graph";
+
+    //    envire::core::EnvireGraph graph_mls;
+    //    graph_mls.addTransform("root", _map_frame.value(), envire::core::Transform(base::TransformWithCovariance::Identity()));
+    //    graph_mls.addItem(pre_mls);
+    //    graph_mls.saveToFile(env_path.string());
+    //    
+    //    return true;
+    //}
+    
+    _mls_precalculated_map.write(pre_mls);
+    
+	return true;
+}
+
+bool PointcloudMapper::createTSDFMap(maps::grid::TSDFVolumetricMap& tsdf, VertexObjectList& vertices)
+{
+    for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
+	{
+        PointCloudMeasurement::Ptr measurement = boost::dynamic_pointer_cast<PointCloudMeasurement>(v->measurement);
+        if(!measurement)
+        {
+            mLogger->message(ERROR, "Vertex is not a Pointcloud!");
+            continue;
+        }
+        
+        PointCloud::ConstPtr pcl = measurement->getPointCloud();
+        pcl::PointCloud<pcl::PointXYZ> cloud_xyz;
+        pcl::copyPointCloud(*pcl, cloud_xyz);
+        tsdf.mergePointCloud(cloud_xyz, v->corrected_pose);
+	}
+    return true;
 }
 
 PointCloud::Ptr PointcloudMapper::buildPointcloud(const VertexObjectList& vertices)
@@ -510,6 +576,7 @@ void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base:
 			if(_map_publish_rate > 0 && (mScansAdded % _map_publish_rate) == 0)
 			{
 				generate_map();
+				generate_precalculated_mls();
 			}
 		}else
 		{

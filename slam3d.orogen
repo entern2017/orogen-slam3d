@@ -20,6 +20,8 @@ task_context "PointcloudMapper" do
 	input_port 'scan', '/base/samples/Pointcloud'
 	output_port 'cloud', '/base/samples/Pointcloud'
 	output_port 'mls', '/maps/grid/MLSMapSloped'
+	output_port 'mls_precalculated_map', '/maps/grid/MLSMapPrecalculated'
+	output_port 'polygon_mesh', '/pcl/PolygonMesh'
 	output_port 'robot2map', 'base/samples/RigidBodyState'
 	output_port 'odometry2map', 'base/samples/RigidBodyState'
 
@@ -51,6 +53,10 @@ task_context "PointcloudMapper" do
 	operation('force_add')
 	.returns('/bool')
 	.doc("Force to add one scan to the graph regardless of change in pose.")
+
+	operation('generate_precalculated_mls')
+	.returns('/bool')
+	.doc('Produce a TSDF-based MLS map used for instance in simulation')
 
 	operation('write_graph')
 	.returns('/bool')

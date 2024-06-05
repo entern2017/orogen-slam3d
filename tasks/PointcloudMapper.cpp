@@ -162,7 +162,7 @@ void PointcloudMapper::sendPointcloud(const VertexObjectList& vertices)
 
 void PointcloudMapper::handleNewScan(const VertexObject& scan)
 {
-	addScanToMap(castToPointcloud(scan.measurement), scan.corrected_pose);
+	addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(scan.measurement_uuid)), scan.corrected_pose);
 }
 
 void PointcloudMapper::addScanToMap(PointCloudMeasurement::Ptr scan, const Transform& pose)
@@ -170,12 +170,14 @@ void PointcloudMapper::addScanToMap(PointCloudMeasurement::Ptr scan, const Trans
 	PointCloud::ConstPtr pcl = scan->getPointCloud();
 	boost::unique_lock<boost::shared_mutex> guard(mMapMutex);
 	mMultiLayerMap.mergePointCloud(*pcl, pose * scan->getSensorPose());
+	mTSDFVolMap->mergePointCloud(*pcl, pose * scan->getSensorPose());
 }
 
 void PointcloudMapper::clearMap()
 {
 	boost::unique_lock<boost::shared_mutex> guard(mMapMutex);
 	mMultiLayerMap.clear();
+	mTSDFVolMap->clear();
 }
 
 void PointcloudMapper::rebuildMap(const VertexObjectList& vertices)
@@ -186,7 +188,7 @@ void PointcloudMapper::rebuildMap(const VertexObjectList& vertices)
 	boost::shared_lock<boost::shared_mutex> guard(mGraphMutex);
 	for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
 	{
-		addScanToMap(castToPointcloud(v->measurement), v->corrected_pose);
+		addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(v->measurement_uuid)), v->corrected_pose);
 	}
 	timeval finish = mClock->now();
 	int duration = finish.tv_sec - start.tv_sec;
@@ -199,6 +201,13 @@ void PointcloudMapper::sendMap()
 {
 	// Publish the MLS-Map
 	_mls.write(mMultiLayerMap);
+	
+	maps::grid::MLSMapPrecalculated mls_pre;
+	maps::tools::TSDF_MLSMapReconstruction surface_reconstruction;
+	surface_reconstruction.setTSDFMap(mTSDFVolMap);
+	surface_reconstruction.reconstruct(mls_pre);
+	_mls_pre.write(mls_pre);
+	
 	mScansReceived = 0;
 }
 
@@ -214,7 +223,7 @@ bool PointcloudMapper::loadPLYMap(const std::string& path)
 		try
 		{
 			VertexObject root_node = mGraph->getVertex(0);
-			mMapper->addExternalMeasurement(initial_map, root_node.measurement->getUniqueId(),
+			mMapper->addExternalMeasurement(initial_map, root_node.measurement_uuid,
 				Transform::Identity(), Covariance<6>::Identity(), "ply-loader");
 			addScanToMap(initial_map, Transform::Identity());
 			return true;
@@ -366,6 +375,12 @@ bool PointcloudMapper::configureHook()
 	mMultiLayerMap = maps::grid::MLSMapSloped(maps::grid::Vector2ui(x_size, y_size), Eigen::Vector2d(mGridConf.resolution, mGridConf.resolution), _grid_mls_config.value());
 	mMultiLayerMap.getId() = "/slam3d-mls";
 	mMultiLayerMap.translate(Eigen::Vector3d(mGridConf.min_x, mGridConf.min_y, 0));
+
+	// Initialize TSDF map
+	mTSDFVolMap = boost::make_shared<maps::grid::TSDFVolumetricMap>(maps::grid::Vector2ui(x_size, y_size),
+		Eigen::Vector3d(mGridConf.resolution, mGridConf.resolution, mGridConf.resolution));
+	mTSDFVolMap->getId() = "/slam3d-tsdf";
+	mTSDFVolMap->translate(Eigen::Vector3d(mGridConf.min_x, mGridConf.min_y, 0));
 
 	// load a-priori map file
 	if(!_apriori_ply_map.value().empty() && loadPLYMap(_apriori_ply_map.value()))

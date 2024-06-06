@@ -162,7 +162,7 @@ void PointcloudMapper::sendPointcloud(const VertexObjectList& vertices)
 
 void PointcloudMapper::handleNewScan(const VertexObject& scan)
 {
-	addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(scan.measurement_uuid)), scan.corrected_pose);
+	addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(scan.measurementUuid)), scan.correctedPose);
 }
 
 void PointcloudMapper::addScanToMap(PointCloudMeasurement::Ptr scan, const Transform& pose)
@@ -188,7 +188,7 @@ void PointcloudMapper::rebuildMap(const VertexObjectList& vertices)
 	boost::shared_lock<boost::shared_mutex> guard(mGraphMutex);
 	for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
 	{
-		addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(v->measurement_uuid)), v->corrected_pose);
+		addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(v->measurementUuid)), v->correctedPose);
 	}
 	timeval finish = mClock->now();
 	int duration = finish.tv_sec - start.tv_sec;
@@ -223,7 +223,7 @@ bool PointcloudMapper::loadPLYMap(const std::string& path)
 		try
 		{
 			VertexObject root_node = mGraph->getVertex(0);
-			mMapper->addExternalMeasurement(initial_map, root_node.measurement_uuid,
+			mMapper->addExternalMeasurement(initial_map, root_node.measurementUuid,
 				Transform::Identity(), Covariance<6>::Identity(), "ply-loader");
 			addScanToMap(initial_map, Transform::Identity());
 			return true;
@@ -517,7 +517,7 @@ void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base:
 			mPclSensor->linkLastToNeighbors();
 			handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
 			
-			if(mGraph->getNumOfNewConstraints() >= _optimization_rate)
+			if((int)mGraph->getNumOfNewConstraints() >= _optimization_rate)
 			{
 				optimize();
 			}

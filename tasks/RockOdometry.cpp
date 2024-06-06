@@ -20,14 +20,14 @@ RockOdometry::~RockOdometry()
 void RockOdometry::handleNewVertex(IdType vertex)
 {
 	// Add odometry transform to previous vertex
-	timeval stamp = mGraph->getVertex(vertex).mStamp;
+	timeval stamp = mGraph->getVertex(vertex).timestamp;
 	Transform currentOdometricPose = getPose(stamp);
 	if(mLastVertex > 0)
 	{
 		Transform transform = mLastOdometricPose.inverse() * currentOdometricPose;
 		SE3Constraint::Ptr se3(new SE3Constraint(mName, transform, calculateCovariance(transform).inverse()));
 		mGraph->addConstraint(mLastVertex, vertex, se3);
-		mGraph->setCorrectedPose(vertex, mGraph->getVertex(mLastVertex).corrected_pose * transform);
+		mGraph->setCorrectedPose(vertex, mGraph->getVertex(mLastVertex).correctedPose * transform);
 	}
 	
 	// Add a gravity vector to this vertex

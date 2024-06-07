@@ -162,7 +162,7 @@ void PointcloudMapper::sendPointcloud(const VertexObjectList& vertices)
 
 void PointcloudMapper::handleNewScan(const VertexObject& scan)
 {
-	addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(scan.measurementUuid)), scan.correctedPose);
+	addScanToMap(castToPointcloud(mMapper->getGraph()->getMeasurement(scan.measurementUuid)), scan.correctedPose);
 }
 
 void PointcloudMapper::addScanToMap(PointCloudMeasurement::Ptr scan, const Transform& pose)
@@ -188,7 +188,7 @@ void PointcloudMapper::rebuildMap(const VertexObjectList& vertices)
 	boost::shared_lock<boost::shared_mutex> guard(mGraphMutex);
 	for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
 	{
-		addScanToMap(castToPointcloud(mMapper->getMeasurementStorage()->get(v->measurementUuid)), v->correctedPose);
+		addScanToMap(castToPointcloud(mMapper->getGraph()->getMeasurement(v->measurementUuid)), v->correctedPose);
 	}
 	timeval finish = mClock->now();
 	int duration = finish.tv_sec - start.tv_sec;
@@ -292,7 +292,9 @@ bool PointcloudMapper::configureHook()
 	mPclSensor = new PointCloudSensor("LaserScanner", mLogger);
 	mPclSensor->setPatchSolver(mPatchSolver);
 
-	mGraph = new BoostGraph(mLogger);
+	mStorage = new MeasurementStorage;
+
+	mGraph = new BoostGraph(mLogger, mStorage);
 	mGraph->setSolver(mSolver);
 	mGraph->fixNext();
 
@@ -327,7 +329,7 @@ bool PointcloudMapper::configureHook()
 	mLogger->message(INFO, (boost::format("use_odometry:           %1%") % _use_odometry.get()).str());	
 	if(_use_odometry.get())
 	{
-		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry);
+		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry, true);
 		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
 		mLogger->message(INFO, (boost::format("add_odometry_edges:     %1%") % _add_odometry_edges).str());
 		if(_add_odometry_edges)
@@ -598,6 +600,7 @@ void PointcloudMapper::cleanupHook()
 		delete mOdometry;
 	delete mSolver;
 	delete mPatchSolver;
+	delete mStorage;
 	delete mLogger;
 	delete mClock;
 }

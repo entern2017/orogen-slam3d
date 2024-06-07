@@ -5,8 +5,9 @@
 #include <boost/format.hpp>
 using namespace slam3d;
 
-RockOdometry::RockOdometry(const std::string& name, Graph* graph, Solver* solver, Logger* logger, transformer::Transformation& tf)
- : PoseSensor(name, graph, logger), mTransformation(tf), mSolver(solver)
+RockOdometry::RockOdometry(const std::string& name, Graph* graph, Solver* solver, Logger* logger,
+	transformer::Transformation& tf, bool interpolate)
+ : PoseSensor(name, graph, logger), mTransformation(tf), mSolver(solver), mInterpolate(interpolate)
 {
 	mLastVertex = 0;
 	mLastOdometricPose = Transform::Identity();
@@ -52,7 +53,7 @@ Transform RockOdometry::getPose(base::Time t)
 	bool res;
 	try
 	{
-		res = mTransformation.get(t, affine, true);
+		res = mTransformation.get(t, affine, mInterpolate);
 	}catch(std::exception& e)
 	{
 		throw InvalidPose(e.what());

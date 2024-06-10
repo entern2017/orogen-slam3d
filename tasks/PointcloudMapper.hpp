@@ -6,7 +6,6 @@
 #include <slam3d/sensor/pcl/PointCloudSensor.hpp>
 
 #include <maps/grid/MLSMap.hpp>
-#include <maps/tools/TSDF_MLSMapReconstruction.hpp>
 
 #include <queue>
 #include <boost/thread/shared_mutex.hpp>
@@ -66,7 +65,6 @@ namespace slam3d
 
 		// Parameters for creation of MLS
 		maps::grid::MLSMapSloped mMultiLayerMap;
-		maps::grid::TSDFVolumetricMap::Ptr mTSDFVolMap;
 		GridConfiguration mGridConf;
 		
 		// Current state of transformations

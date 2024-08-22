@@ -10,7 +10,17 @@ namespace slam3d
 	class RockOdometry : public PoseSensor
 	{
 	public:
-		RockOdometry(const std::string& name, Graph* graph, Solver* s, Logger* logger, transformer::Transformation& tf);
+		/**
+		 * @brief Pose sensor that uses the Rock transformer
+		 * @param name
+		 * @param graph
+		 * @param s
+		 * @param logger
+		 * @param tf
+		 * @param interpolate set to true when align_port is used
+		 */
+		RockOdometry(const std::string& name, Graph* graph, Solver* s, Logger* logger,
+			transformer::Transformation& tf, bool interpolate);
 		~RockOdometry();
 
 		void setGravityReference(const Direction& ref) {mGravityReference = ref;}
@@ -26,6 +36,7 @@ namespace slam3d
 		IdType mLastVertex;
 		Direction mGravityReference;
 		Solver* mSolver;
+		bool mInterpolate;
 	};
 }
 

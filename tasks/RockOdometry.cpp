@@ -5,8 +5,9 @@
 #include <boost/format.hpp>
 using namespace slam3d;
 
-RockOdometry::RockOdometry(const std::string& name, Graph* graph, Solver* solver, Logger* logger, transformer::Transformation& tf)
- : PoseSensor(name, graph, logger), mTransformation(tf), mSolver(solver)
+RockOdometry::RockOdometry(const std::string& name, Graph* graph, Solver* solver, Logger* logger,
+	transformer::Transformation& tf, bool interpolate)
+ : PoseSensor(name, graph, logger), mTransformation(tf), mSolver(solver), mInterpolate(interpolate)
 {
 	mLastVertex = 0;
 	mLastOdometricPose = Transform::Identity();
@@ -20,14 +21,14 @@ RockOdometry::~RockOdometry()
 void RockOdometry::handleNewVertex(IdType vertex)
 {
 	// Add odometry transform to previous vertex
-	timeval stamp = mGraph->getVertex(vertex).measurement->getTimestamp();
+	timeval stamp = mGraph->getVertex(vertex).timestamp;
 	Transform currentOdometricPose = getPose(stamp);
 	if(mLastVertex > 0)
 	{
 		Transform transform = mLastOdometricPose.inverse() * currentOdometricPose;
 		SE3Constraint::Ptr se3(new SE3Constraint(mName, transform, calculateCovariance(transform).inverse()));
 		mGraph->addConstraint(mLastVertex, vertex, se3);
-		mGraph->setCorrectedPose(vertex, mGraph->getVertex(mLastVertex).corrected_pose * transform);
+		mGraph->setCorrectedPose(vertex, mGraph->getVertex(mLastVertex).correctedPose * transform);
 	}
 	
 	// Add a gravity vector to this vertex
@@ -52,7 +53,7 @@ Transform RockOdometry::getPose(base::Time t)
 	bool res;
 	try
 	{
-		res = mTransformation.get(t, affine, true);
+		res = mTransformation.get(t, affine, mInterpolate);
 	}catch(std::exception& e)
 	{
 		throw InvalidPose(e.what());

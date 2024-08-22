@@ -51,6 +51,7 @@ namespace slam3d
 		// Members
 		slam3d::Clock* mClock;
 		slam3d::Logger* mLogger;
+		slam3d::MeasurementStorage* mStorage;
 		slam3d::Graph* mGraph;
 		slam3d::Mapper* mMapper;
 		slam3d::PointCloudSensor* mPclSensor;

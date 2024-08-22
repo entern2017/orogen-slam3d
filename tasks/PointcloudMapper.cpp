@@ -228,7 +228,7 @@ void PointcloudMapper::sendPointcloud(const VertexObjectList& vertices)
 
 void PointcloudMapper::handleNewScan(const VertexObject& scan)
 {
-	addScanToMap(castToPointcloud(scan.measurement), scan.corrected_pose);
+	addScanToMap(castToPointcloud(mMapper->getGraph()->getMeasurement(scan.measurementUuid)), scan.correctedPose);
 }
 
 void PointcloudMapper::addScanToMap(PointCloudMeasurement::Ptr scan, const Transform& pose)
@@ -252,7 +252,7 @@ void PointcloudMapper::rebuildMap(const VertexObjectList& vertices)
 	boost::shared_lock<boost::shared_mutex> guard(mGraphMutex);
 	for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
 	{
-		addScanToMap(castToPointcloud(v->measurement), v->corrected_pose);
+		addScanToMap(castToPointcloud(mMapper->getGraph()->getMeasurement(v->measurementUuid)), v->correctedPose);
 	}
 	timeval finish = mClock->now();
 	int duration = finish.tv_sec - start.tv_sec;
@@ -280,7 +280,7 @@ bool PointcloudMapper::loadPLYMap(const std::string& path)
 		try
 		{
 			VertexObject root_node = mGraph->getVertex(0);
-			mMapper->addExternalMeasurement(initial_map, root_node.measurement->getUniqueId(),
+			mMapper->addExternalMeasurement(initial_map, root_node.measurementUuid,
 				Transform::Identity(), Covariance<6>::Identity(), "ply-loader");
 			addScanToMap(initial_map, Transform::Identity());
 			return true;
@@ -349,7 +349,9 @@ bool PointcloudMapper::configureHook()
 	mPclSensor = new PointCloudSensor("LaserScanner", mLogger);
 	mPclSensor->setPatchSolver(mPatchSolver);
 
-	mGraph = new BoostGraph(mLogger);
+	mStorage = new MeasurementStorage;
+
+	mGraph = new BoostGraph(mLogger, mStorage);
 	mGraph->setSolver(mSolver);
 	mGraph->fixNext();
 
@@ -384,7 +386,7 @@ bool PointcloudMapper::configureHook()
 	mLogger->message(INFO, (boost::format("use_odometry:           %1%") % _use_odometry.get()).str());	
 	if(_use_odometry.get())
 	{
-		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry);
+		mOdometry = new RockOdometry("RockOdometry", mGraph, mSolver, mLogger, _robot2odometry, true);
 		_robot2odometry.registerUpdateCallback(boost::bind(&PointcloudMapper::transformerCallback, this, _1));
 		mLogger->message(INFO, (boost::format("add_odometry_edges:     %1%") % _add_odometry_edges).str());
 		if(_add_odometry_edges)
@@ -568,7 +570,7 @@ void PointcloudMapper::scanTransformerCallback(const base::Time &ts, const base:
 			mPclSensor->linkLastToNeighbors();
 			handleNewScan(mGraph->getVertex(mPclSensor->getLastVertexId()));
 			
-			if(mGraph->getNumOfNewConstraints() >= _optimization_rate)
+			if((int)mGraph->getNumOfNewConstraints() >= _optimization_rate)
 			{
 				optimize();
 			}
@@ -650,6 +652,7 @@ void PointcloudMapper::cleanupHook()
 		delete mOdometry;
 	delete mSolver;
 	delete mPatchSolver;
+	delete mStorage;
 	delete mLogger;
 	delete mClock;
 }

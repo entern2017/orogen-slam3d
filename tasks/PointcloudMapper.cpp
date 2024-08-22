@@ -183,7 +183,7 @@ bool PointcloudMapper::createTSDFMap(maps::grid::TSDFVolumetricMap& tsdf, Vertex
 {
     for(VertexObjectList::const_iterator v = vertices.begin(); v != vertices.end(); ++v)
 	{
-        PointCloudMeasurement::Ptr measurement = boost::dynamic_pointer_cast<PointCloudMeasurement>(v->measurement);
+        PointCloudMeasurement::Ptr measurement = boost::dynamic_pointer_cast<PointCloudMeasurement>(mMapper->getGraph()->getMeasurement(v->measurementUuid));
         if(!measurement)
         {
             mLogger->message(ERROR, "Vertex is not a Pointcloud!");
@@ -193,7 +193,7 @@ bool PointcloudMapper::createTSDFMap(maps::grid::TSDFVolumetricMap& tsdf, Vertex
         PointCloud::ConstPtr pcl = measurement->getPointCloud();
         pcl::PointCloud<pcl::PointXYZ> cloud_xyz;
         pcl::copyPointCloud(*pcl, cloud_xyz);
-        tsdf.mergePointCloud(cloud_xyz, v->corrected_pose);
+        tsdf.mergePointCloud(cloud_xyz, v->correctedPose);
 	}
     return true;
 }
